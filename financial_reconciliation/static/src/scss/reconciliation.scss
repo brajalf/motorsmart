@@ -1,0 +1,49 @@
+// Kanban: colores y estilo refinado
+.oe_kanban_color_draft    { border-left: 4px solid #a0a0a0; }
+.oe_kanban_color_review   { border-left: 4px solid #3498db; }
+.oe_kanban_color_validated{ border-left: 4px solid #2ecc71; }
+.oe_kanban_color_cancelled{ border-left: 4px solid #e74c3c; }
+
+.financial-reconciliation-card {
+  transition: all 0.3s ease;
+  &:hover {
+    box-shadow: rgba(0,0,0,0.15) 0 6px 12px;
+    transform: translateY(-3px);
+  }
+  .o_kanban_record_bottom {
+    border-top: 1px solid #eee;
+    padding-top: 8px;
+    margin-top: 8px;
+  }
+}
+
+// Distribución flexible para tarjetas Kanban
+.kanban_view .o_kanban_view {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.kanban_view .o_kanban_record {
+  flex: 1 1 300px;
+  margin: 8px;
+  box-sizing: border-box;
+  min-width: 250px;
+}
+
+// SCSS específico para Kanban en móvil
+@media (max-width: 768px) {
+  .kanban_view .o_kanban_record {
+    flex: 1 1 100%;
+    margin: 5px 0;
+  }
+}
+
+// Evita usar estilos que transformen la tabla/lista en layouts no estándar
+// Listado: permite scroll horizontal en pantallas pequeñas
+@media (max-width: 768px) {
+  .o_list_view {
+    overflow-x: auto;
+  }
+}
+
+// No modificamos la estructura de tabla nativa en desktop

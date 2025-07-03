@@ -1,0 +1,9 @@
+<odoo>
+    <record id="seq_financial_reconciliation" model="ir.sequence">
+        <field name="name">Conciliación Financiera</field>
+        <field name="code">financial.reconciliation</field>
+        <field name="prefix">CONC/%(year)s/</field>
+        <field name="padding">4</field>
+        <field name="number_next">1</field>
+    </record>
+</odoo>

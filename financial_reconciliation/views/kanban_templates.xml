@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="kanban_reconciliation" inherit_id="web.assets_backend">
+        <t t-call="web.basic_layout">
+            <t t-call="web.qweb">
+                <t t-set="colors">
+                    {
+                        'draft': 'lightgray',
+                        'review': 'lightblue',
+                        'validated': 'lightgreen',
+                        'cancelled': 'lightcoral'
+                    }
+                </t>
+                
+                <div t-name="financial_reconciliation.kanban_box" class="o_kanban_record">
+                    <div t-attf-class="oe_kanban_card oe_kanban_color_{{record.state.raw_value}}"
+                         t-attf-style="background-color: #{colors[record.state.raw_value]}; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                        
+                        <div class="o_kanban_record_top mb8">
+                            <strong>
+                                <field name="name" class="oe_kanban_card_title"/>
+                            </strong>
+                            <span class="oe_kanban_date float-right">
+                                <field name="date" widget="date"/>
+                            </span>
+                        </div>
+                        
+                        <div class="o_kanban_record_body">
+                            <div class="row">
+                                <div class="col-6">
+                                    <div><strong>Cédula:</strong></div>
+                                    <field name="identification"/>
+                                </div>
+                                <div class="col-6">
+                                    <div><strong>Contrato:</strong></div>
+                                    <field name="contract_number"/>
+                                </div>
+                            </div>
+                            
+                            <div class="row mt8">
+                                <div class="col-6">
+                                    <div><strong>Recibo:</strong></div>
+                                    <field name="receipt_number"/>
+                                </div>
+                                <div class="col-6">
+                                    <div><strong>Monto:</strong></div>
+                                    <field name="amount"/>
+                                    <field name="currency_id" widget="monetary" options="{'currency_field': 'currency_id'}" invisible="1"/>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="o_kanban_record_bottom mt8">
+                            <field name="state" widget="statusbar" statusbar_visible="draft,review,validated,cancelled"/>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

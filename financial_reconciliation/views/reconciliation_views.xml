@@ -1,0 +1,141 @@
+<odoo>
+  <!-- Vista Lista -->
+  <record id="view_reconciliation_list" model="ir.ui.view">
+    <field name="name">financial.reconciliation.list</field>
+    <field name="model">financial.reconciliation</field>
+    <field name="arch" type="xml">
+      <list string="Conciliaciones Financieras">
+        <header>
+          <button name="import_from_external_db"
+                  string="Consultar BD Externa"
+                  type="object"
+                  class="oe_highlight"
+                  icon="fa-database"
+                  display="always"/>
+
+            <button name="action_insert_external" string="Insertar Registros en BD Externa" type="object" class="oe_highlight" icon="fa-database" display="always"/>
+            <button name="action_update_external" string="Actualizar Registros en BD Externa" type="object" class="oe_highlight" icon="fa-database" display="always"/>
+        </header>
+        <field name="name"/>
+        <field name="date"/>
+        <field name="identification"/>
+        <field name="contract_number"/>
+        <field name="receipt_number"/>
+        <field name="amount"/>
+        <field name="reference"/>
+        <field name="state" widget="statusbar"/>
+      </list>
+    </field>
+  </record>
+
+  <!-- Vista Kanban (si aplica) -->
+  <record id="view_reconciliation_kanban" model="ir.ui.view">
+    <field name="name">financial.reconciliation.kanban</field>
+    <field name="model">financial.reconciliation</field>
+    <field name="arch" type="xml">
+      <kanban>
+        <templates>
+          <t t-name="kanban-box">
+            <div class="oe_kanban_global_click">
+              <div class="o_kanban_record">
+                <strong><field name="name"/></strong>
+                <div>Contrato: <field name="contract_number"/></div>
+                <div>Recibo: <field name="receipt_number"/></div>
+                <div>Monto: <field name="amount"/></div>
+                <div><field name="state" widget="statusbar"/></div>
+              </div>
+            </div>
+          </t>
+        </templates>
+      </kanban>
+    </field>
+  </record>
+
+  <!-- Vista Form (sin attrs ni states) -->
+  <record id="view_reconciliation_form" model="ir.ui.view">
+    <field name="name">financial.reconciliation.form</field>
+    <field name="model">financial.reconciliation</field>
+    <field name="arch" type="xml">
+      <form>
+        <header>
+          <!-- Procesar OCR siempre visible -->
+      <button name="process_ocr"
+              string="Procesar OCR"
+              type="object"
+              class="oe_highlight"/>
+
+      <!-- Pasar a Revisión: solo en borrador -->
+      <button name="action_to_review"
+              string="Pasar a Revisión"
+              type="object"
+              class="oe_highlight"
+              invisible="state != 'draft'"/>
+
+      <!-- Validar: solo en revisión -->
+      <button name="action_to_validated"
+              string="Validar"
+              type="object"
+              class="oe_highlight"
+              invisible="state != 'review'"/>
+
+      <button name="action_insert_external"
+          string="Insertar en BD Externa"
+          type="object"
+          class="oe_highlight"
+          invisible="state != 'validated'"/>
+
+      <button name="action_update_external"
+          string="Actualizar registro"
+          type="object"
+          class="oe_highlight"
+          invisible="state != 'validated'"/> 
+
+      <!-- Cancelar: en todos menos validado -->
+      <button name="action_cancel"
+              string="Cancelar"
+              type="object"
+              class="oe_highlight"
+              invisible="state == 'validated'"/>
+
+      <field name="state" widget="statusbar"/>
+        </header>
+        <sheet>
+          <group>
+            <field name="name"/>
+            <field name="date"/>
+            <field name="identification"/>
+            <field name="contract_number"/>
+            <field name="receipt_number"/>
+            <field name="amount"/>
+            <field name="currency_id"/>
+            <field name="partner_id"/>
+            <field name="reference"/>
+          </group>
+          <notebook>
+            <page string="Datos Externos">
+              <field name="search_results" widget="text"/>
+            </page>
+            <page string="Comprobante">
+              <field name="image" widget="image" class="oe_avatar"/>
+              <field name="ocr_text" widget="text"/>
+            </page>
+          </notebook>
+        </sheet>
+      </form>
+    </field>
+  </record>
+
+  <!-- Acción y Menú -->
+  <record id="action_reconciliation" model="ir.actions.act_window">
+    <field name="name">Conciliaciones Financieras</field>
+    <field name="res_model">financial.reconciliation</field>
+    <field name="view_mode">list,kanban,form</field>
+    <field name="view_id" ref="view_reconciliation_list"/>
+    <field name="help" type="html">
+      <p class="o_view_nocontent_smiling_face">Crea una nueva conciliación</p>
+    </field>
+  </record>
+
+  <menuitem id="menu_financial_reconciliation" name="Conciliación" parent="account.menu_finance"/>
+  <menuitem id="menu_reconciliation_tree" name="Conciliaciones" parent="menu_financial_reconciliation" action="action_reconciliation"/>
+</odoo>
