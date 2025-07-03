@@ -124,7 +124,7 @@
           <group>
             <group>
               <field name="student_name" readonly="1"/>
-              <field name="student_id"/ readonly="1">
+              <field name="student_id" readonly="1"/>
               <field name="student_campus" readonly="1"/>
             </group>
             <group>
