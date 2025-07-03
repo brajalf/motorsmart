@@ -1,6 +1,6 @@
 {
     'name': 'Conciliación Financiera',
-    'version': '1.0.1',
+    'version': '1.1.0',
     'summary': 'Módulo para conciliación financiera con conexión a BD externa y OCR',
     'description': '''
         Módulo de conciliación financiera con:
@@ -17,8 +17,6 @@
         'security/security_rules.xml',
         'security/ir.model.access.csv',
         'views/reconciliation_views.xml',
-        #'views/kanban_templates.xml',
-        'views/form_templates.xml',
         'data/financial_sequence.xml',
     ],
     'assets': {

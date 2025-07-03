@@ -10,28 +10,43 @@ class FinancialReconciliation(models.Model):
     _description = 'Conciliación Financiera'
     _order = 'date desc'
 
-    name = fields.Char('Consecutivo', required=True, default=lambda self: _('New'))
-    date = fields.Date('Fecha', default=fields.Date.today)
-    identification = fields.Char('Cédula')
-    contract_number = fields.Char('Número de Contrato')
-    receipt_number = fields.Char('Número de Recibo')
-    amount = fields.Float('Monto')
-    reference = fields.Char('referencia', help="Referencia del pago asociado a este registro")
-    currency_id = fields.Many2one('res.currency', string='Moneda')
-    partner_id = fields.Many2one('res.partner', 'Cliente')
-
+    # --- CAMPOS EXISTENTES ---
+    name = fields.Char('Consecutivo', required=True, copy=False, readonly=True, default=lambda self: _('New'))
+    date = fields.Date('Fecha Recibo', readonly=True)
+    identification = fields.Char('Doc. de Titular', readonly=True)
+    contract_number = fields.Char('Numero Contrato')
+    receipt_number = fields.Char('Numero Recibo', readonly=True)
+    amount = fields.Monetary('Valor Pagado', currency_field='currency_id', readonly=True)
+    reference = fields.Char('Referencia')
+    currency_id = fields.Many2one('res.currency', string='Moneda', default=lambda self: self.env.company.currency_id)
+    partner_id = fields.Many2one('res.partner', 'Revisor', readonly=True)
     state = fields.Selection([
         ('draft', 'Borrador'),
-        ('review', 'Revisión'),
+        ('review', 'En Revisión'),
         ('validated', 'Validado'),
         ('cancelled', 'Cancelado'),
-    ], string='Estado', default='draft')
-
-    external_data = fields.Text('Datos Externos')
+    ], string='Estado', default='draft', tracking=True)
+    external_data = fields.Text('Datos Externos', readonly=True)
     image = fields.Binary('Comprobante')
-    ocr_text = fields.Text('Texto OCR')
-    has_image = fields.Boolean('Tiene Comprobante', compute='_compute_has_image')
-    search_results = fields.Text('Resultados Búsqueda', compute='_compute_search_results')
+    ocr_text = fields.Text('Texto OCR', readonly=True)
+    
+    # --- NUEVOS CAMPOS ---
+    # Información General
+    invoice_number = fields.Char('Numero Factura', readonly=True)
+    student_campus = fields.Char('Sede Estudiante', readonly=True)
+    holder_name = fields.Char('Nombre del Titular', readonly=True)
+    student_id = fields.Char('Doc. Estudiante', readonly=True)
+    student_name = fields.Char('Nombre del Estudiante', readonly=True)
+    concept = fields.Char('Concepto', readonly=True)
+    detail = fields.Text('Detalle', readonly=True)
+    payment_date = fields.Date('Fecha Consignación', readonly=True)
+    bank_id = fields.Many2one('res.bank', string='Banco', readonly=True)
+
+    # Desglose del Valor Pagado
+    cash_payment = fields.Monetary('Efectivo', currency_field='currency_id', readonly=True)
+    check_payment = fields.Monetary('Cheque', currency_field='currency_id', readonly=True)
+    voucher_payment = fields.Monetary('Voucher', currency_field='currency_id', readonly=True)
+    deposit_payment = fields.Monetary('Consignación', currency_field='currency_id', readonly=True)
 
     @api.model
     def create(self, vals):
