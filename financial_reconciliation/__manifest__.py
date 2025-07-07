@@ -12,7 +12,7 @@
     'category': 'Accounting',
     'author': 'Brandon León',
     'website': 'https://www.invictustechnologytic.com',
-    'depends': ['base', 'web', 'account'],
+    'depends': ['base', 'web', 'account', 'mail'],
     'data': [
         'security/security_rules.xml',
         'security/ir.model.access.csv',
