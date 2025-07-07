@@ -179,9 +179,9 @@
           </notebook>
         </sheet>
         <div class="oe_chatter">
-            <field name="message_follower_ids"/>
-            <field name="activity_ids"/>
-            <field name="message_ids"/>
+            <field name="message_follower_ids" widget="mail_followers"/>
+            <field name="activity_ids" widget="mail_activity"/>
+            <field name="message_ids" widget="mail_thread"/>
         </div>
       </form>
     </field>
@@ -198,6 +198,6 @@
     </field>
   </record>
 
-  <menuitem id="menu_financial_reconciliation" name="Conciliación" parent="account.menu_finance"/>
+  <menuitem id="menu_financial_reconciliation" name="Conciliación" />
   <menuitem id="menu_reconciliation_tree" name="Conciliaciones" parent="menu_financial_reconciliation" action="action_reconciliation"/>
 </odoo>
