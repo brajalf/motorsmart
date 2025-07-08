@@ -6,47 +6,50 @@ _logger = logging.getLogger(__name__)
 
 class FinancialReconciliation(models.Model):
     _name = 'financial.reconciliation'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread']
     _description = 'Conciliación Financiera'
     _order = 'date desc'
 
-    # --- CAMPOS EXISTENTES ---
+     # --- CAMPO CONSECUTIVO Y ESTADO ---
     name = fields.Char('Consecutivo', required=True, copy=False, readonly=True, default=lambda self: _('New'))
-    date = fields.Date('Fecha Recibo', readonly=True)
-    identification = fields.Char('Doc. de Titular', readonly=True)
-    contract_number = fields.Char('Numero Contrato')
-    receipt_number = fields.Char('Numero Recibo', readonly=True)
-    amount = fields.Monetary('Valor Pagado', currency_field='currency_id', readonly=True)
-    reference = fields.Char('Referencia')
-    currency_id = fields.Many2one('res.currency', string='Moneda', default=lambda self: self.env.company.currency_id)
-    partner_id = fields.Many2one('res.partner', 'Revisor', readonly=True)
     state = fields.Selection([
         ('draft', 'Borrador'),
         ('review', 'En Revisión'),
         ('validated', 'Validado'),
         ('cancelled', 'Cancelado'),
     ], string='Estado', default='draft', tracking=True)
-    external_data = fields.Text('Datos Externos', readonly=True)
-    image = fields.Binary('Comprobante')
-    ocr_text = fields.Text('Texto OCR', readonly=True)
-    
-    # --- NUEVOS CAMPOS ---
-    # Información General
-    invoice_number = fields.Char('Numero Factura', readonly=True)
-    student_campus = fields.Char('Sede Estudiante', readonly=True)
+
+    # --- INFORMACIÓN DEL TITULAR Y ESTUDIANTE ---
     holder_name = fields.Char('Nombre del Titular', readonly=True)
-    student_id = fields.Char('Doc. Estudiante', readonly=True)
+    identification = fields.Char('Doc. del Titular', readonly=True)
     student_name = fields.Char('Nombre del Estudiante', readonly=True)
+    student_id = fields.Char('Doc. Estudiante', readonly=True)
+    student_campus = fields.Char('Sede Estudiante', readonly=True)
+    partner_id = fields.Many2one('res.partner', 'Revisor')
+
+    # --- INFORMACIÓN DEL RECIBO Y PAGO ---
+    date = fields.Date('Fecha Recibo', readonly=True)
+    payment_date = fields.Date('Fecha Consignación', readonly=True)
+    contract_number = fields.Char('Número Contrato')
+    receipt_number = fields.Char('Número Recibo', readonly=True)
+    invoice_number = fields.Char('Número Factura', readonly=True)
+    reference = fields.Char('Referencia')
     concept = fields.Char('Concepto', readonly=True)
     detail = fields.Text('Detalle', readonly=True)
-    payment_date = fields.Date('Fecha Consignación', readonly=True)
     bank_id = fields.Many2one('res.bank', string='Banco', readonly=True)
 
-    # Desglose del Valor Pagado
+    # --- DESGLOSE DEL VALOR PAGADO ---
+    currency_id = fields.Many2one('res.currency', string='Moneda', default=lambda self: self.env.company.currency_id)
+    amount = fields.Monetary('Valor Pagado', currency_field='currency_id', readonly=True)
     cash_payment = fields.Monetary('Efectivo', currency_field='currency_id', readonly=True)
     check_payment = fields.Monetary('Cheque', currency_field='currency_id', readonly=True)
     voucher_payment = fields.Monetary('Voucher', currency_field='currency_id', readonly=True)
     deposit_payment = fields.Monetary('Consignación', currency_field='currency_id', readonly=True)
+
+    # --- CAMPOS TÉCNICOS Y DE CONTROL ---
+    external_data = fields.Text('Datos Externos', readonly=True)
+    image = fields.Binary('Comprobante')
+    ocr_text = fields.Text('Texto OCR', readonly=True)
 
     @api.model
     def create(self, vals):
@@ -55,33 +58,52 @@ class FinancialReconciliation(models.Model):
         return super().create(vals)
 
     def import_from_external_db(self):
-        """Consulta BD externa sin filtros y crea múltiples registros."""
+        """Consulta BD externa sin filtros y crea múltiples registros con toda la nueva data."""
         External = self.env['external.db.connector']
-        results = External.search_external_data()  # sin argumentos
+        results = External.search_external_data()
 
         if not results:
             raise UserError(_("No se encontraron datos en la base de datos externa."))
 
         count = 0
         for data in results:
-            # Evitar duplicados
+            # Evitar duplicados basados en una combinación de campos clave
             exists = self.search([
-                ('identification', '=', data['cedula']),
-                ('contract_number', '=', data['contrato']),
-                ('receipt_number', '=', data['recibo']),
-                ('reference', '=', data['referencia']),
+                ('identification', '=', data.get('cedula')),
+                ('contract_number', '=', data.get('contrato')),
+                ('receipt_number', '=', data.get('recibo')),
+                ('reference', '=', data.get('referencia')),
             ], limit=1)
+
             if not exists:
+                # Buscar el banco por nombre para obtener el ID
+                bank_name = data.get('banco')
+                bank_id = self.env['res.bank'].search([('name', '=', bank_name)], limit=1)
+
                 self.create({
-                    'identification': data['cedula'],
-                    'contract_number': data['contrato'],
-                    'receipt_number': data['recibo'],
-                    'date': data['fecha'],
-                    'amount': data['monto'],
-                    'reference': data['referencia'],
-                    'external_data': _(
-                        "Importado automáticamente el %s"
-                    ) % fields.Date.today(),
+                    # Datos principales
+                    'identification': data.get('cedula'),
+                    'holder_name': data.get('titular'),
+                    'student_id': data.get('doc_estudiante'),
+                    'student_name': data.get('estudiante'),
+                    'student_campus': data.get('sede'),
+                    'contract_number': data.get('contrato'),
+                    'receipt_number': data.get('recibo'),
+                    'invoice_number': data.get('factura'),
+                    'date': data.get('fecha'),
+                    'payment_date': data.get('fecha_pago'),
+                    'reference': data.get('referencia'),
+                    'concept': data.get('concepto'),
+                    'detail': data.get('detalle'),
+                    'bank_id': bank_id.id if bank_id else False,
+                    # Montos
+                    'amount': data.get('monto'),
+                    'cash_payment': data.get('efectivo'),
+                    'check_payment': data.get('cheque'),
+                    'voucher_payment': data.get('voucher'),
+                    'deposit_payment': data.get('consignacion'),
+                    # Info de importación
+                    'external_data': _("Importado automáticamente el %s") % fields.Date.today(),
                 })
                 count += 1
 
@@ -91,22 +113,6 @@ class FinancialReconciliation(models.Model):
             'params': {
                 'title': _("Importación completada"),
                 'message': _("%d registros importados desde la BD externa.") % count,
-                'type': 'success',
-                'sticky': False,
-            }
-        }
-
-    def _compute_search_results(self):
-        for record in self:
-            record.search_results = record.external_data or "No hay resultados"
-
-    def _show_notification(self, message):
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _('Búsqueda Externa'),
-                'message': message,
                 'type': 'success',
                 'sticky': False,
             }

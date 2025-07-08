@@ -11,16 +11,13 @@
           <button name="action_update_external" string="Actualizar Registros en BD Externa" type="object" class="oe_highlight" icon="fa-database" display="always"/>-->
         </header>
         <field name="name"/>
-        <field name="reference"/>
-        <field name="student_name"/>
-        <field name="student_id"/>
-        <field name="holder_name"/>
-        <field name="identification"/>
-        <field name="contract_number"/>
-        <field name="date"/>
-        <field name="payment_date"/>
-        <field name="amount" sum="Total"/>
-        <field name="state" widget="badge" decoration-success="state == 'validated'" decoration-info="state == 'review'"/>
+                <field name="student_name"/>
+                <field name="identification" string="Doc. Titular"/>
+                <field name="contract_number"/>
+                <field name="date"/>
+                <field name="payment_date"/>
+                <field name="amount" sum="Total"/>
+                <field name="state" widget="badge" decoration-success="state == 'validated'" decoration-info="state == 'review'" decoration-danger="state == 'cancelled'"/>
       </list>
     </field>
   </record>
@@ -130,7 +127,7 @@
             <group>
               <field name="holder_name" readonly="1"/>
               <field name="identification" readonly="1"/>
-              <field name="partner_id" context="{'show_vat': True}"/>
+              <field name="partner_id" string="Revisor"/>
             </group>
           </group>
           
@@ -150,7 +147,7 @@
                 </group>
               </group>
               <group>
-                  <field name="detail" placeholder="Añadir detalles adicionales aquí..."/>
+                  <field name="detail" placeholder="Detalles adicionales de la importación..." readonly="1"/>
               </group>
             </page>
 
@@ -178,11 +175,7 @@
             </page>
           </notebook>
         </sheet>
-        <div class="oe_chatter">
-            <field name="message_follower_ids" widget="mail_followers"/>
-            <field name="activity_ids" widget="mail_activity"/>
-            <field name="message_ids" widget="mail_thread"/>
-        </div>
+        <chatter/>
       </form>
     </field>
   </record>
