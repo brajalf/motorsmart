@@ -15,9 +15,9 @@ class ExternalDBConnector(models.Model):
         try:
             conn = psycopg2.connect(
                 dbname="postgres",
-                user="Analista_de_Datos.iqvzkdbychgnwmwcyhbj",
+                user="postgres.iqvzkdbychgnwmwcyhbj",
                 password="$d9a-ARCHj65bRV",
-                host="aws-0-us-east-2.pooler.supabase.com",
+                host="vFMQ33W%mZ&bFE#",
                 port="6543"
             )
             _logger.info("✅ Conexión exitosa a BD externa")
@@ -39,16 +39,28 @@ class ExternalDBConnector(models.Model):
         conn = self.get_connection()
         cursor = conn.cursor()
         base_query = """
-            SELECT
-                row_number() OVER (ORDER BY cedulatitular) AS id,
-                cedulatitular    AS cedula,
-                numerocontrato   AS contrato,
-                numero_de_recibo AS recibo,
-                fechaCompra      AS fecha,
-                valor_pagado     AS monto,
-                referencia       AS referencia
-            FROM public.vw_conciliation_query
-            WHERE 1=1
+            SELECT * FROM (
+            SELECT     numero_de_recibo AS "Numero Recibo",
+                    numero_de_factura AS "Numero Factura",
+                    numero_de_contrato AS "Numero Contrato",
+                    numero_documento_titular AS "Doc. de Titular",        
+                    nombre_completo AS "Nombre Titular",
+                    numero_documento_estudiante AS "Doc. de Estudiante",
+                    nombre_completo_estudiante AS "Nombre Estudiante",
+                    concepto,
+                    detalles,
+                    date_purchase_val AS "Date",
+                    fecha_de_recibo AS "Fecha Recibo",
+                    valor_pagado AS "Valor Pagado",
+                    valor_efectivo AS "Valor Efectivo",
+                    valor_cheque AS "Valor Cheque", 
+                    valor_voucher AS "Valor Voucher",
+                    valor_consignacion AS "Valor de Consignacion",
+                    id_transacion AS "Referencia",
+                    'Mercado Pago' AS "Banco"
+            FROM stg_reconciliation_motor.resumen
+            WHERE A = TRUE
+        ) AS A
         """
         clauses, params = [], []
 
