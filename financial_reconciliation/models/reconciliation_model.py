@@ -58,61 +58,63 @@ class FinancialReconciliation(models.Model):
         return super().create(vals)
 
     def import_from_external_db(self):
-        """Consulta BD externa sin filtros y crea múltiples registros con toda la nueva data."""
+        """Consulta BD externa y crea registros mapeando los campos CORRECTAMENTE."""
         External = self.env['external.db.connector']
         results = External.search_external_data()
-
+        
         if not results:
-            raise UserError(_("No se encontraron datos en la base de datos externa."))
+            raise UserError(_("No se encontraron nuevos datos en la base de datos externa."))
 
         count = 0
+        receipts_processed = []
         for data in results:
-            # Evitar duplicados basados en una combinación de campos clave
-            exists = self.search([
-                ('identification', '=', data.get('cedula')),
-                ('contract_number', '=', data.get('contrato')),
-                ('receipt_number', '=', data.get('recibo')),
-                ('reference', '=', data.get('referencia')),
-            ], limit=1)
-
+            # Evitar duplicados por número de recibo
+            receipt_number = data.get('numero_recibo')
+            if not receipt_number:
+                continue # Omitir registros sin número de recibo
+            
+            exists = self.search([('receipt_number', '=', receipt_number)], limit=1)
             if not exists:
-                # Buscar el banco por nombre para obtener el ID
                 bank_name = data.get('banco')
-                bank_id = self.env['res.bank'].search([('name', '=', bank_name)], limit=1)
+                bank_id = self.env['res.bank'].search([('name', 'ilike', bank_name)], limit=1)
 
+                # --- ¡AQUÍ ESTÁ LA CORRECCIÓN CLAVE! ---
+                # Usamos los nombres de columna correctos que devuelve la consulta
                 self.create({
-                    # Datos principales
-                    'identification': data.get('cedula'),
-                    'holder_name': data.get('titular'),
+                    'identification': data.get('doc_titular'),
+                    'holder_name': data.get('nombre_titular'),
                     'student_id': data.get('doc_estudiante'),
-                    'student_name': data.get('estudiante'),
+                    'student_name': data.get('nombre_estudiante'),
                     'student_campus': data.get('sede'),
-                    'contract_number': data.get('contrato'),
-                    'receipt_number': data.get('recibo'),
-                    'invoice_number': data.get('factura'),
-                    'date': data.get('fecha'),
-                    'payment_date': data.get('fecha_pago'),
+                    'contract_number': data.get('numero_contrato'),
+                    'receipt_number': data.get('numero_recibo'),
+                    'invoice_number': data.get('numero_factura'),
+                    'date': data.get('fecha_recibo'),
+                    'payment_date': data.get('fecha_consignacion'),
                     'reference': data.get('referencia'),
                     'concept': data.get('concepto'),
-                    'detail': data.get('detalle'),
+                    'detail': data.get('detalles'),
                     'bank_id': bank_id.id if bank_id else False,
-                    # Montos
-                    'amount': data.get('monto'),
-                    'cash_payment': data.get('efectivo'),
-                    'check_payment': data.get('cheque'),
-                    'voucher_payment': data.get('voucher'),
-                    'deposit_payment': data.get('consignacion'),
-                    # Info de importación
+                    'amount': data.get('valor_pagado'),
+                    'cash_payment': data.get('valor_efectivo'),
+                    'check_payment': data.get('valor_cheque'),
+                    'voucher_payment': data.get('valor_voucher'),
+                    'deposit_payment': data.get('valor_consignacion'),
                     'external_data': _("Importado automáticamente el %s") % fields.Date.today(),
                 })
                 count += 1
+                receipts_processed.append(receipt_number)
+
+        # (Opcional pero recomendado) Marcar registros como procesados en la BD externa
+        if receipts_processed:
+            External.mark_records_as_processed(receipts_processed)
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _("Importación completada"),
-                'message': _("%d registros importados desde la BD externa.") % count,
+                'message': _("%d nuevos registros importados desde la BD externa.") % count,
                 'type': 'success',
                 'sticky': False,
             }
