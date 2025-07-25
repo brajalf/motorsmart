@@ -20,20 +20,20 @@ class FinancialReconciliation(models.Model):
     ], string='Estado', default='draft', tracking=True)
 
     # --- INFORMACIÓN DEL TITULAR Y ESTUDIANTE ---
-    holder_name = fields.Char('Nombre del Titular', readonly=True)
-    identification = fields.Char('Doc. del Titular', readonly=True)
-    student_name = fields.Char('Nombre del Estudiante', readonly=True)
-    student_id = fields.Char('Doc. Estudiante', readonly=True)
+    holder_name = fields.Char('Nombre del Titular', tracking=True)
+    identification = fields.Char('Doc. del Titular', tracking=True)
+    student_name = fields.Char('Nombre del Estudiante', tracking=True)
+    student_id = fields.Char('Doc. Estudiante', tracking=True)
     student_campus = fields.Char('Sede Estudiante', readonly=True)
-    partner_id = fields.Many2one('res.partner', 'Revisor')
+    partner_id = fields.Many2one('res.partner', 'Revisor', tracking=True)
 
     # --- INFORMACIÓN DEL RECIBO Y PAGO ---
     date = fields.Date('Fecha Recibo', readonly=True)
     payment_date = fields.Date('Fecha Consignación', readonly=True)
-    contract_number = fields.Char('Número Contrato')
-    receipt_number = fields.Char('Número Recibo', readonly=True)
+    contract_number = fields.Char('Número Contrato', tracking=True)
+    receipt_number = fields.Char('Número Recibo', tracking=True)
     invoice_number = fields.Char('Número Factura', readonly=True)
-    reference = fields.Char('Referencia')
+    reference = fields.Char('Referencia', tracking=True)
     concept = fields.Char('Concepto', readonly=True)
     detail = fields.Text('Detalle', readonly=True)
     bank_id = fields.Many2one('res.bank', string='Banco', readonly=True)
@@ -48,7 +48,7 @@ class FinancialReconciliation(models.Model):
 
     # --- CAMPOS TÉCNICOS Y DE CONTROL ---
     external_data = fields.Text('Datos Externos', readonly=True)
-    image = fields.Binary('Comprobante')
+    image = fields.Binary('Comprobante', tracking=True)
     ocr_text = fields.Text('Texto OCR', readonly=True)
 
     @api.model

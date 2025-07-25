@@ -120,13 +120,13 @@
           </div>
           <group>
             <group>
-              <field name="student_name" readonly="1"/>
-              <field name="student_id" readonly="1"/>
+              <field name="student_name"/>
+              <field name="student_id"/>
               <field name="student_campus" readonly="1"/>
             </group>
             <group>
-              <field name="holder_name" readonly="1"/>
-              <field name="identification" readonly="1"/>
+              <field name="holder_name"/>
+              <field name="identification"/>
               <field name="partner_id" string="Revisor"/>
             </group>
           </group>
@@ -138,7 +138,7 @@
                   <field name="contract_number"/>
                   <field name="reference"/>
                   <field name="invoice_number" readonly="1"/>
-                  <field name="receipt_number" readonly="1"/>
+                  <field name="receipt_number"/>
                 </group>
                 <group>
                   <field name="concept" readonly="1"/>
