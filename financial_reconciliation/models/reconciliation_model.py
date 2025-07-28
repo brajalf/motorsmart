@@ -1,6 +1,13 @@
+import base64
+import pytesseract
+from pdf2image import convert_from_bytes
+from PIL import Image
+from io import BytesIO
+# --- Imports de Odoo y Python ---
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 import logging
+import re
 
 _logger = logging.getLogger(__name__)
 
@@ -10,7 +17,7 @@ class FinancialReconciliation(models.Model):
     _description = 'Conciliación Financiera'
     _order = 'date desc'
 
-     # --- CAMPO CONSECUTIVO Y ESTADO ---
+    # --- CAMPO CONSECUTIVO Y ESTADO ---
     name = fields.Char('Consecutivo', required=True, copy=False, readonly=True, default=lambda self: _('New'))
     state = fields.Selection([
         ('draft', 'Borrador'),
@@ -51,7 +58,7 @@ class FinancialReconciliation(models.Model):
     origin_data = fields.Char('Origen del Dato', readonly=True)
     type_conciliation = fields.Char('Tipo de Conciliación', readonly=True)
     external_data = fields.Text('Datos Externos', readonly=True)
-    image = fields.Binary('Comprobante', tracking=True)
+    image = fields.Binary('Comprobante')
     ocr_text = fields.Text('Texto OCR', readonly=True)
 
     @api.model
@@ -122,13 +129,72 @@ class FinancialReconciliation(models.Model):
             }
         }
 
+    def _get_ocr_text_from_image(self, image_data):
+        """Helper privado que mueve la lógica del controlador aquí para hacer el OCR."""
+        try:
+            image_binary = base64.b64decode(image_data)
+            
+            # Si es PDF, convertir a imagen
+            if image_binary.startswith(b'%PDF'):
+                images = convert_from_bytes(image_binary)
+                text = ""
+                for img in images:
+                    # Se recomienda especificar el idioma para mejorar la precisión
+                    text += pytesseract.image_to_string(img, lang='spa')
+                return text
+            else:
+                img = Image.open(BytesIO(image_binary))
+                return pytesseract.image_to_string(img, lang='spa')
+        except Exception as e:
+            _logger.error("Error en OCR: %s", e)
+            raise UserError(_("Error procesando la imagen con OCR: %s") % e)
+
     def process_ocr(self):
         self.ensure_one()
         if not self.image:
             raise UserError(_("Por favor cargue un comprobante primero"))
-        ocr_result = self.env['ocr.controller'].extract_text(self.image)
-        self.ocr_text = ocr_result
-        return self._show_notification('OCR completado: Texto extraído')
+        
+        # 1. Llamar a la lógica de OCR local
+        ocr_text_raw = self._get_ocr_text_from_image(self.image)
+        self.ocr_text = ocr_text_raw
+        
+        # 2. Intentar rellenar campos con expresiones regulares
+        vals = {}
+        patterns = {
+            'identification': r'(?i)(?:identificaci[oó]n|c[eé]dula|doc|cc)[\s:.]*(\d+[\d.-]*)',
+            'holder_name': r'(?i)(?:nombre|titular)[\s:.]*([A-Za-z\s]+)',
+            'student_name': r'(?i)(?:estudiante|alumno)[\s:.]*([A-Za-z\s]+)',
+            'contract_number': r'(?i)(?:contrato|convenio)[\s:N.]*(\w+)',
+            'receipt_number': r'(?i)(?:recibo|comprobante)[\s:N.]*(\w+)',
+            'amount': r'(?i)(?:total|valor|monto)[\s:$]*([\d,.]*)'
+        }
+        
+        for field, pattern in patterns.items():
+            match = re.search(pattern, self.ocr_text)
+            if match:
+                value = match.group(1).strip()
+                if field == 'amount':
+                    try:
+                        # Limpiar valor monetario para convertirlo a float
+                        vals[field] = float(value.replace('.', '').replace(',', '.'))
+                    except ValueError:
+                        _logger.warning("No se pudo convertir el valor '%s' a un monto.", value)
+                else:
+                    vals[field] = value
+        
+        if vals:
+            self.write(vals)
+            
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("OCR Procesado"),
+                'message': _("Se extrajo el texto y se intentó autocompletar el formulario."),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
 
     def clear_ocr(self):
         self.ensure_one()
@@ -162,18 +228,23 @@ class FinancialReconciliation(models.Model):
         for rec in self:
             if rec.state != 'validated':
                 raise UserError(_("Solo se puede insertar si está Validado."))
-            if rec.external_data:
-                raise UserError(_("Ya existe en la BD externa, usa 'Actualizar registro'."))
+            # Se ajusta la lógica para permitir la inserción si no viene de una importación
+            # if rec.external_data and "Importado" in rec.external_data:
+            #     raise UserError(_("Este registro fue importado. Usa 'Actualizar registro' en su lugar."))
+            
             external = self.env['external.db.connector']
-            external.insert_external_record(
-                identification=rec.identification,
-                contract=rec.contract_number,
-                receipt=rec.receipt_number,
-                monto=rec.amount,
-                fecha=rec.date,
-                reference=rec.reference,
-                name=rec.name,
-            )
+            external.insert_external_record({
+                'doc_titular': rec.identification,
+                'nombre_titular': rec.holder_name,
+                'doc_estudiante': rec.student_id,
+                'nombre_estudiante': rec.student_name,
+                'numero_contrato': rec.contract_number,
+                'numero_recibo': rec.receipt_number,
+                'fecha_recibo': rec.date,
+                'valor_pagado': rec.amount,
+                'referencia': rec.reference,
+                'consecutivo_odoo': rec.name, # Campo para futura referencia
+            })
             rec.external_data = _("Insertado en BD externa el %s") % fields.Date.today()
         return {
             'type': 'ir.actions.client',
@@ -191,14 +262,18 @@ class FinancialReconciliation(models.Model):
         for rec in self:
             if rec.state != 'validated':
                 raise UserError(_("Solo se puede actualizar si está Validado."))
-            if not rec.external_data:
-                raise UserError(_("No existe en la BD externa, usa 'Insertar registro'."))
+            # if not rec.external_data:
+            #     raise UserError(_("No existe en la BD externa, usa 'Insertar registro'."))
+            
             external = self.env['external.db.connector']
-            external.update_external_record(
-                monto=rec.amount,
-                fecha=rec.date,
-                name=rec.name,
-            )
+            external.update_external_record({
+                'valor_pagado': rec.amount,
+                'fecha_recibo': rec.date,
+                'doc_titular': rec.identification,
+                'numero_contrato': rec.contract_number,
+                # Usamos el número de recibo como identificador único para la actualización
+                'numero_recibo': rec.receipt_number,
+            })
             rec.external_data = _("Actualizado en BD externa el %s") % fields.Date.today()
         return {
             'type': 'ir.actions.client',
@@ -210,6 +285,7 @@ class FinancialReconciliation(models.Model):
                 'sticky': False,
             }
         }
+
 
     def action_cancel(self):
         for rec in self:

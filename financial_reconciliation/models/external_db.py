@@ -93,3 +93,80 @@ class ExternalDBConnector(models.Model):
         finally:
             if conn:
                 conn.close()
+
+    def insert_external_record(self, data):
+        """
+        Inserta un nuevo registro en la tabla resumen_conciliation de la BD externa.
+        'data' es un diccionario con los valores a insertar.
+        """
+        # Columnas que se insertarán. Asegúrate de que coincidan con la tabla externa.
+        columns = [
+            'doc_titular', 'nombre_titular', 'doc_estudiante', 'nombre_estudiante',
+            'numero_contrato', 'numero_recibo', 'fecha_recibo', 'valor_pagado',
+            'referencia', 'consecutivo_odoo' 
+        ]
+        
+        # Filtramos los datos que realmente se van a insertar
+        record_to_insert = {key: data.get(key) for key in columns}
+        
+        # Creamos la sentencia SQL dinámicamente
+        cols_str = ", ".join(record_to_insert.keys())
+        vals_str = ", ".join(["%s"] * len(record_to_insert))
+        query = f"INSERT INTO stg_reconciliation_motor.resumen_conciliation ({cols_str}) VALUES ({vals_str})"
+
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(query, tuple(record_to_insert.values()))
+                conn.commit()
+                _logger.info("✅ Registro insertado en la BD externa: %s", data.get('numero_recibo'))
+        except psycopg2.Error as e:
+            _logger.error("❌ Error al insertar en BD externa: %s", e)
+            conn.rollback()
+            raise UserError(_("No se pudo insertar el registro en la base de datos externa: %s") % e)
+        finally:
+            if conn:
+                conn.close()
+
+    def update_external_record(self, data):
+        """
+        Actualiza un registro existente en la tabla resumen_conciliation.
+        Usa 'numero_recibo' como identificador único para la cláusula WHERE.
+        """
+        # Campos que se pueden actualizar.
+        update_fields = ['valor_pagado', 'fecha_recibo', 'doc_titular', 'numero_contrato']
+        
+        # Valores a actualizar y la cláusula WHERE
+        values_to_update = []
+        set_clauses = []
+        
+        for field in update_fields:
+            if field in data:
+                set_clauses.append(f"{field} = %s")
+                values_to_update.append(data[field])
+
+        if not set_clauses:
+            _logger.warning("⚠️ No hay campos para actualizar en la BD externa para el recibo %s.", data.get('numero_recibo'))
+            return
+
+        # El número de recibo es el último elemento en la tupla de valores
+        values_to_update.append(data.get('numero_recibo'))
+        
+        query = f"UPDATE stg_reconciliation_motor.resumen_conciliation SET {', '.join(set_clauses)} WHERE numero_recibo = %s"
+
+        conn = self.get_connection()
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(query, tuple(values_to_update))
+                conn.commit()
+                if cursor.rowcount == 0:
+                     _logger.warning("⚠️ No se encontró el registro con recibo %s para actualizar en la BD externa.", data.get('numero_recibo'))
+                else:
+                    _logger.info("✅ Registro actualizado en BD externa: %s", data.get('numero_recibo'))
+        except psycopg2.Error as e:
+            _logger.error("❌ Error al actualizar en BD externa: %s", e)
+            conn.rollback()
+            raise UserError(_("No se pudo actualizar el registro en la base de datos externa: %s") % e)
+        finally:
+            if conn:
+                conn.close()
