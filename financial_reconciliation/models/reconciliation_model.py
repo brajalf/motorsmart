@@ -132,7 +132,7 @@ class FinancialReconciliation(models.Model):
         }
 
     def _get_ocr_text_from_image(self, image_data):
-        """Helper privado para ejecutar el OCR en la imagen."""
+        """Ejecuta el OCR sobre la imagen y devuelve el texto plano."""
         try:
             image_binary = base64.b64decode(image_data)
             if image_binary.startswith(b'%PDF'):
@@ -151,41 +151,34 @@ class FinancialReconciliation(models.Model):
         if not date_str:
             return None
         
+        # Normalizar meses en texto a números
         month_map = {
             'enero': '01', 'ene': '01', 'febrero': '02', 'feb': '02', 'marzo': '03', 'mar': '03',
             'abril': '04', 'abr': '04', 'mayo': '05', 'may': '05', 'junio': '06', 'jun': '06',
             'julio': '07', 'jul': '07', 'agosto': '08', 'ago': '08', 'septiembre': '09', 'sep': '09',
             'octubre': '10', 'oct': '10', 'noviembre': '11', 'nov': '11', 'diciembre': '12', 'dic': '12'
         }
-        
         date_str_lower = date_str.lower()
         for k, v in month_map.items():
             date_str_lower = date_str_lower.replace(k, v)
 
-        # Formatos a intentar en orden de probabilidad
-        formats_to_try = [
-            '%d %m %Y',          # 27 07 2025
-            '%d/%m/%Y',          # 27/07/2025
-            '%Y-%m-%d',          # 2025-07-27
-        ]
-        
-        for fmt in formats_to_try:
+        # Buscar patrones de fecha comunes
+        match = re.search(r'(\d{1,2})[/\s.-]+(\d{1,2})[/\s.-]+(\d{4})', date_str_lower)
+        if match:
             try:
-                # Extraer solo la parte de la fecha
-                cleaned_date_str = re.search(r'(\d{1,2}[/\s]\d{1,2}[/\s]\d{4})', date_str_lower)
-                if cleaned_date_str:
-                    return fields.Date.to_string(datetime.strptime(cleaned_date_str.group(1).replace(' ', '/'), '%d/%m/%Y').date())
-                
-                return fields.Date.to_string(datetime.strptime(date_str_lower, fmt).date())
-            except (ValueError, TypeError):
-                continue
+                # Intentar formato D/M/A (más común en Latam)
+                return fields.Date.to_string(datetime.strptime(f"{match.group(1)}/{match.group(2)}/{match.group(3)}", '%d/%m/%Y').date())
+            except ValueError:
+                try:
+                    # Intentar M/D/A si el anterior falla
+                    return fields.Date.to_string(datetime.strptime(f"{match.group(2)}/{match.group(1)}/{match.group(3)}", '%d/%m/%Y').date())
+                except ValueError:
+                    pass
         _logger.warning("No se pudo convertir la fecha: %s", date_str)
         return None
 
     def process_ocr(self):
-        """
-        Lógica mejorada de OCR que procesa línea por línea y usa patrones más robustos.
-        """
+        """Lógica de OCR mejorada usando búsqueda por palabras clave."""
         self.ensure_one()
         if not self.image:
             raise UserError(_("Por favor cargue un comprobante primero"))
@@ -194,92 +187,72 @@ class FinancialReconciliation(models.Model):
         self.ocr_text = ocr_text_raw
         
         vals = {}
-        lines = ocr_text_raw.split('\n')
+        lines = [line.strip() for line in ocr_text_raw.split('\n') if line.strip()]
 
-        # Definición de patrones de REGEX mejorados basados en las imágenes de ejemplo
-        patterns = {
-            'amount': r'[\$\s]*([\d.,]+)',
-            'identification': r'([Cc\.\s]*\d[\d.-]{5,})',
-            'contract_number': r'([A-Z0-9-]+)',
-            'receipt_number': r'(\w+)',
-            'holder_name': r'([A-Za-zÁÉÍÓÚáéíóúñÑ\s]+)',
-            'date': r'(\d{1,2}[\s/](?:de\s)?\w+[\s/](?:de\s)?\d{4}|\d{1,2}/\d{1,2}/\d{4})'
+        # Mapa de palabras clave a campos del modelo
+        keyword_map = {
+            'número de contrato': 'contract_number',
+            'titular nombre': 'holder_name',
+            'titular documento': 'identification',
+            'referencia': 'reference',
+            'valor pagado': 'amount',
+            'cuánto': 'amount',
+            'valor de la transferencia': 'amount',
+            'valor del pago': 'amount',
+            'total pagado': 'amount',
+            'fecha de solicitud': 'date',
+            'fecha y hora': 'date',
+            'fecha': 'date',
+            'comprobante no': 'receipt_number',
+            'número de factura': 'receipt_number',
+            'cus': 'receipt_number',
+            'no. transacción': 'receipt_number',
         }
 
-        # Palabras clave para cada campo. La primera es la principal.
-        keywords = {
-            'amount': ['valor pagado', 'valor de la transferencia', 'cuánto', 'valor del pago', 'total pagado'],
-            'identification': ['titular documento', 'identificaci', 'cédula', 'c.c', 'usuario pagador'],
-            'holder_name': ['titular nombre', 'nombre', 'titular'],
-            'contract_number': ['número de contrato', 'contrato'],
-            'receipt_number': ['comprobante no', 'factura de comercio', 'número de factura', 'cus', 'no. transacción'],
-            'reference': ['referencia', 'no. autorización'],
-            'date': ['fecha de solicitud', 'fecha'],
-            'bank_name': ['banco', 'producto destino']
-        }
+        for line in lines:
+            line_lower = line.lower()
+            for key, field in keyword_map.items():
+                if key in line_lower:
+                    # Se encontró una clave. Extraer el valor que está después de los ':'
+                    parts = line.split(':')
+                    if len(parts) > 1:
+                        value = parts[1].strip()
+                        
+                        # Si el campo ya tiene valor, no lo sobreescribas (prioridad a la primera clave encontrada)
+                        if field in vals:
+                            continue
 
-        # Procesa cada línea del texto extraído
-        for i, line in enumerate(lines):
-            line_lower = line.lower().strip()
-            if not line_lower:
-                continue
-
-            for field, keys in keywords.items():
-                for key in keys:
-                    if key in line_lower:
-                        # Extraer el valor de la misma línea o de la siguiente
-                        value_line = line
-                        if not re.search(r'\d', value_line.replace(key, '')): # Si no hay dígitos (o valor) en la línea, probar la siguiente
-                           if i + 1 < len(lines):
-                               value_line += " " + lines[i+1]
-
-                        match = re.search(patterns.get(field, r'(.+)'), value_line, re.IGNORECASE)
-                        if match:
-                            extracted_value = match.group(1).strip()
-                            
-                            # Limpieza de datos específicos por campo
-                            if field == 'amount':
-                                clean_val = re.sub(r'[^\d,]', '', extracted_value).replace(',', '.')
-                                if '.' in clean_val:
-                                    # Asumimos que el último punto es el decimal
-                                    parts = clean_val.split('.')
-                                    clean_val = "".join(parts[:-1]) + "." + parts[-1]
+                        # Limpieza y asignación de valores
+                        if field == 'amount':
+                            clean_val = re.sub(r'[^\d,]', '', value).replace(',', '.')
+                            if '.' in clean_val:
+                                val_parts = clean_val.split('.')
+                                clean_val = "".join(val_parts[:-1]) + "." + val_parts[-1]
+                            try:
                                 vals[field] = float(clean_val)
-                            elif field == 'identification':
-                                vals[field] = re.sub(r'[^\d]', '', extracted_value)
-                            elif field == 'date':
-                                parsed_date = self._parse_date(extracted_value)
-                                if parsed_date:
-                                    vals[field] = parsed_date
-                            elif field == 'holder_name':
-                                # Eliminar la palabra clave para no guardarla en el nombre
-                                vals[field] = re.sub(key, '', extracted_value, flags=re.IGNORECASE).strip()
-                            elif field not in vals: # Evitar sobreescribir con valores menos prioritarios
-                                vals[field] = extracted_value
-                        break # Pasar al siguiente campo una vez que se encuentra una clave
+                            except ValueError:
+                                _logger.warning("No se pudo convertir a monto: %s", value)
+                        elif field == 'identification':
+                            vals[field] = re.sub(r'[^\d]', '', value)
+                        elif field == 'date':
+                            vals[field] = self._parse_date(value)
+                        else:
+                            vals[field] = value
+                    break # Salir del bucle de claves, pasar a la siguiente línea
 
         if vals:
-            # Para campos que no se pudieron rellenar, dejar que el usuario los complete
-            for field in ['holder_name', 'identification', 'amount', 'date', 'contract_number', 'receipt_number', 'reference']:
-                if vals.get(field):
-                    self[field] = vals[field]
+            self.write(vals)
             
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': _("OCR Procesado"),
-                'message': _("Se han autocompletado los campos basados en la imagen. Por favor, verifique los datos."),
+                'message': _("Campos autocompletados. Por favor, verifique los datos."),
                 'type': 'success',
                 'sticky': True,
             }
         }
-
-
-    def clear_ocr(self):
-        self.ensure_one()
-        self.ocr_text = False
-        return self._show_notification('Texto OCR limpiado')
 
     def write(self, vals):
         if 'image' in vals and not vals.get('image'):
