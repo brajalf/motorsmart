@@ -47,6 +47,8 @@ class FinancialReconciliation(models.Model):
     deposit_payment = fields.Monetary('Consignación', currency_field='currency_id', readonly=True)
 
     # --- CAMPOS TÉCNICOS Y DE CONTROL ---
+    origin_data = fields.Char('Origen del Dato', readonly=True)
+    type_conciliation = fields.Char('Tipo de Conciliación', readonly=True)
     external_data = fields.Text('Datos Externos', readonly=True)
     image = fields.Binary('Comprobante', tracking=True)
     ocr_text = fields.Text('Texto OCR', readonly=True)
@@ -100,6 +102,8 @@ class FinancialReconciliation(models.Model):
                     'check_payment': data.get('valor_cheque'),
                     'voucher_payment': data.get('valor_voucher'),
                     'deposit_payment': data.get('valor_consignacion'),
+                    'origin_data': data.get('origen_dato'),
+                    'type_conciliation': data.get('tipo_conciliacion'),
                     'external_data': _("Importado automáticamente el %s") % fields.Date.today(),
                 })
                 count += 1

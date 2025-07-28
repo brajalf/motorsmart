@@ -36,27 +36,28 @@ class ExternalDBConnector(models.Model):
     def search_external_data(self, **kwargs):
         """Busca y devuelve todos los registros desde la vista vw_oddo_motor."""
         query = """
-            SELECT
-                "Numero Recibo" AS numero_recibo,
-                "Numero Factura" AS numero_factura,
-                "Numero Contrato" AS numero_contrato,
-                "Doc. de Titular" AS doc_titular,
-                "Nombre Titular" AS nombre_titular,
-                "Doc. de Estudiante" AS doc_estudiante,
-                "Nombre Estudiante" AS nombre_estudiante,
-                concepto,
-                detalles,
-                "Date" AS fecha_consignacion,
-                "Fecha Recibo" AS fecha_recibo,
-                "Valor Pagado" AS valor_pagado,
-                "Valor Efectivo" AS valor_efectivo,
-                "Valor Cheque" AS valor_cheque,
-                "Valor Voucher" AS valor_voucher,
-                "Valor de Consignacion" AS valor_consignacion,
-                "Referencia" AS referencia,
-                "Banco" AS banco
-            FROM
-                stg_reconciliation_motor.vw_oddo_motor;
+            SELECT     numero_recibo, 
+                numero_factura, 
+                numero_contrato, 
+                doc_titular, 
+                nombre_titular, 
+                doc_estudiante, 
+                nombre_estudiante, 
+                concepto, 
+                detalles, 
+                fecha_consignacion, 
+                fecha_recibo, 
+                valor_pagado, 
+                valor_efectivo, 
+                valor_cheque, 
+                valor_voucher, 
+                valor_consignacion, 
+                referencia, 
+                banco, 
+                origen_dato, 
+                tipo_conciliacion
+            FROM stg_reconciliation_motor.resumen_conciliation;
+
         """
 
         conn = self.get_connection()

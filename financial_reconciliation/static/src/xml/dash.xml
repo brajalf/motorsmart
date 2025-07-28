@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+  <templates id="financial_reconciliation_templates" xml:space="preserve">
+    <t t-name="financial_reconciliation.ReconciliationDashboard">
+      <div class="o_reconciliation_dashboard p-4 bg-light">
+        <div class="mb-4">
+          <h2>Dashboard de Conciliación</h2>
+          <p class="text-muted">Resumen de estados de las conciliaciones.</p>
+        </div>
+        <div class="row">
+          <div class="col-12">
+            <div class="shadow-sm bg-white p-3 rounded">
+              <h4 class="mb-3">Registros por Estado</h4>
+              <!-- ojo: no auto-cerrar el div, debe tener apertura y cierre -->
+              <div class="chart_container" t-ref="chart_container" style="min-height: 400px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </t>
+  </templates>
+</odoo>

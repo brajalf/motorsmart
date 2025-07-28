@@ -157,6 +157,8 @@
                         <field name="amount" widget="monetary" options="{'currency_field': 'currency_id'}" readonly="1"/>
                         <field name="currency_id" invisible="1"/>
                         <field name="bank_id" readonly="1"/>
+                        <field name="origin_data" readonly="1"/>
+                        <field name="type_conciliation" readonly="1"/>
                     </group>
                     <group>
                         <field name="cash_payment" readonly="1"/>
@@ -180,17 +182,4 @@
     </field>
   </record>
 
-  <!-- Acción y Menú -->
-  <record id="action_reconciliation" model="ir.actions.act_window">
-    <field name="name">Conciliaciones Financieras</field>
-    <field name="res_model">financial.reconciliation</field>
-    <field name="view_mode">list,kanban,form</field>
-    <field name="view_id" ref="view_reconciliation_list"/>
-    <field name="help" type="html">
-      <p class="o_view_nocontent_smiling_face">Crea una nueva conciliación</p>
-    </field>
-  </record>
-
-  <menuitem id="menu_financial_reconciliation" name="Conciliación" />
-  <menuitem id="menu_reconciliation_tree" name="Conciliaciones" parent="menu_financial_reconciliation" action="action_reconciliation"/>
 </odoo>
