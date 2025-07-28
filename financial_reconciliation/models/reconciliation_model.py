@@ -151,7 +151,6 @@ class FinancialReconciliation(models.Model):
         if not date_str:
             return None
         
-        # Normalizar meses en texto a números
         month_map = {
             'enero': '01', 'ene': '01', 'febrero': '02', 'feb': '02', 'marzo': '03', 'mar': '03',
             'abril': '04', 'abr': '04', 'mayo': '05', 'may': '05', 'junio': '06', 'jun': '06',
@@ -162,23 +161,21 @@ class FinancialReconciliation(models.Model):
         for k, v in month_map.items():
             date_str_lower = date_str_lower.replace(k, v)
 
-        # Buscar patrones de fecha comunes
         match = re.search(r'(\d{1,2})[/\s.-]+(\d{1,2})[/\s.-]+(\d{4})', date_str_lower)
         if match:
+            day, month, year = match.group(1), match.group(2), match.group(3)
             try:
-                # Intentar formato D/M/A (más común en Latam)
-                return fields.Date.to_string(datetime.strptime(f"{match.group(1)}/{match.group(2)}/{match.group(3)}", '%d/%m/%Y').date())
+                return fields.Date.to_string(datetime.strptime(f"{day}/{month}/{year}", '%d/%m/%Y').date())
             except ValueError:
                 try:
-                    # Intentar M/D/A si el anterior falla
-                    return fields.Date.to_string(datetime.strptime(f"{match.group(2)}/{match.group(1)}/{match.group(3)}", '%d/%m/%Y').date())
+                    return fields.Date.to_string(datetime.strptime(f"{month}/{day}/{year}", '%m/%d/%Y').date())
                 except ValueError:
                     pass
         _logger.warning("No se pudo convertir la fecha: %s", date_str)
         return None
 
     def process_ocr(self):
-        """Lógica de OCR mejorada usando búsqueda por palabras clave."""
+        """Lógica de OCR mejorada que maneja formatos de clave-valor y posicionales."""
         self.ensure_one()
         if not self.image:
             raise UserError(_("Por favor cargue un comprobante primero"))
@@ -189,56 +186,63 @@ class FinancialReconciliation(models.Model):
         vals = {}
         lines = [line.strip() for line in ocr_text_raw.split('\n') if line.strip()]
 
-        # Mapa de palabras clave a campos del modelo
+        # --- INICIO: Lógica para formato posicional (eCollect) ---
+        for i, line in enumerate(lines):
+            line_lower = line.lower()
+            if 'razón social' in line_lower and 'nit' in line_lower and 'usuario pagador' in line_lower:
+                if i + 1 < len(lines):
+                    values_line = lines[i+1]
+                    parts = re.split(r'\s{2,}|\|', values_line)
+                    if len(parts) >= 3:
+                        vals['identification'] = re.sub(r'[^\d]', '', parts[-1])
+            
+            if 'transacción ecollect' in line_lower and 'fecha y hora' in line_lower:
+                if i + 1 < len(lines):
+                    date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', lines[i+1])
+                    if date_match:
+                        vals['date'] = self._parse_date(date_match.group(1))
+        # --- FIN: Lógica para formato posicional ---
+
+        # --- Lógica general por palabras clave (para todos los formatos) ---
         keyword_map = {
-            'número de contrato': 'contract_number',
-            'titular nombre': 'holder_name',
-            'titular documento': 'identification',
-            'referencia': 'reference',
-            'valor pagado': 'amount',
-            'cuánto': 'amount',
-            'valor de la transferencia': 'amount',
-            'valor del pago': 'amount',
-            'total pagado': 'amount',
-            'fecha de solicitud': 'date',
-            'fecha y hora': 'date',
-            'fecha': 'date',
-            'comprobante no': 'receipt_number',
-            'número de factura': 'receipt_number',
-            'cus': 'receipt_number',
-            'no. transacción': 'receipt_number',
+            'número de contrato': 'contract_number', 'titular nombre': 'holder_name',
+            'titular documento': 'identification', 'referencia': 'reference',
+            'valor pagado': 'amount', 'cuánto': 'amount', 'valor de la transferencia': 'amount',
+            'valor del pago': 'amount', 'total pagado': 'amount', 'total': 'amount',
+            'fecha de solicitud': 'date', 'fecha y hora': 'date', 'fecha': 'date',
+            'comprobante no': 'receipt_number', 'número de factura': 'receipt_number',
+            'cus': 'receipt_number', 'no. transacción': 'receipt_number', 'no. autorización/cus': 'reference',
         }
 
         for line in lines:
             line_lower = line.lower()
             for key, field in keyword_map.items():
                 if key in line_lower:
-                    # Se encontró una clave. Extraer el valor que está después de los ':'
-                    parts = line.split(':')
-                    if len(parts) > 1:
-                        value = parts[1].strip()
-                        
-                        # Si el campo ya tiene valor, no lo sobreescribas (prioridad a la primera clave encontrada)
-                        if field in vals:
-                            continue
+                    if field in vals: continue # No sobreescribir si ya encontramos un valor
 
-                        # Limpieza y asignación de valores
+                    value = ""
+                    if ':' in line:
+                        value = line.split(':', 1)[1].strip()
+                    else:
+                        # Si no hay ':', quitar la palabra clave y tomar el resto
+                        value = re.sub(key, '', line, flags=re.IGNORECASE).strip()
+                        value = value.lstrip('=').strip() # Quitar '=' al inicio
+
+                    if value:
                         if field == 'amount':
                             clean_val = re.sub(r'[^\d,]', '', value).replace(',', '.')
                             if '.' in clean_val:
                                 val_parts = clean_val.split('.')
                                 clean_val = "".join(val_parts[:-1]) + "." + val_parts[-1]
-                            try:
-                                vals[field] = float(clean_val)
-                            except ValueError:
-                                _logger.warning("No se pudo convertir a monto: %s", value)
+                            try: vals[field] = float(clean_val)
+                            except ValueError: pass
                         elif field == 'identification':
                             vals[field] = re.sub(r'[^\d]', '', value)
                         elif field == 'date':
                             vals[field] = self._parse_date(value)
                         else:
                             vals[field] = value
-                    break # Salir del bucle de claves, pasar a la siguiente línea
+                    break
 
         if vals:
             self.write(vals)
@@ -249,8 +253,7 @@ class FinancialReconciliation(models.Model):
             'params': {
                 'title': _("OCR Procesado"),
                 'message': _("Campos autocompletados. Por favor, verifique los datos."),
-                'type': 'success',
-                'sticky': True,
+                'type': 'success', 'sticky': True,
             }
         }
 
