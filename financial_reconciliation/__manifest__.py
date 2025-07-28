@@ -21,12 +21,9 @@
         'data/financial_sequence.xml',
     ],
     'assets': {
-    'web.assets_qweb': [
-            'financial_reconciliation/static/src/xml/dash.xml',
-      ],
     'web.assets_backend': [
         'financial_reconciliation/static/src/scss/reconciliation.scss',
-        #'financial_reconciliation/static/src/js/reconciliation.js',
+        'financial_reconciliation/static/src/xml/dash.xml',
         'https://d3js.org/d3.v7.min.js',
         'financial_reconciliation/static/src/js/dashboard.js',
       ],
