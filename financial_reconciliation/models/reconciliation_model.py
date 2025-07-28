@@ -36,7 +36,8 @@ class FinancialReconciliation(models.Model):
     reference = fields.Char('Referencia', tracking=True)
     concept = fields.Char('Concepto', readonly=True)
     detail = fields.Text('Detalle', readonly=True)
-    bank_id = fields.Many2one('res.bank', string='Banco', readonly=True)
+    bank_name = fields.Char('Banco', readonly=True)
+    
 
     # --- DESGLOSE DEL VALOR PAGADO ---
     currency_id = fields.Many2one('res.currency', string='Moneda', default=lambda self: self.env.company.currency_id)
@@ -77,9 +78,6 @@ class FinancialReconciliation(models.Model):
             
             exists = self.search([('receipt_number', '=', receipt_number)], limit=1)
             if not exists:
-                bank_name = data.get('banco')
-                bank_id = self.env['res.bank'].search([('name', 'ilike', bank_name)], limit=1)
-
                 # --- ¡AQUÍ ESTÁ LA CORRECCIÓN CLAVE! ---
                 # Usamos los nombres de columna correctos que devuelve la consulta
                 self.create({
@@ -96,7 +94,7 @@ class FinancialReconciliation(models.Model):
                     'reference': data.get('referencia'),
                     'concept': data.get('concepto'),
                     'detail': data.get('detalles'),
-                    'bank_id': bank_id.id if bank_id else False,
+                    'bank_name': data.get('banco'),
                     'amount': data.get('valor_pagado'),
                     'cash_payment': data.get('valor_efectivo'),
                     'check_payment': data.get('valor_cheque'),
