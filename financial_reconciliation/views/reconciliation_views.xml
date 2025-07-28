@@ -129,7 +129,7 @@
                     <group>
                         <field name="amount" widget="monetary" options="{'currency_field': 'currency_id'}" readonly="1"/>
                         <field name="currency_id" invisible="1"/>
-                        <field name="bank_id" readonly="1"/>
+                        <field name="bank_name" readonly="1"/>
                         <field name="origin_data" readonly="1"/>
                         <field name="type_conciliation" readonly="1"/>
                     </group>
