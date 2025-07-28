@@ -23,9 +23,6 @@
     'assets': {
     'web.assets_backend': [
         'financial_reconciliation/static/src/scss/reconciliation.scss',
-        'financial_reconciliation/static/src/xml/dash.xml',
-        'https://d3js.org/d3.v7.min.js',
-        'financial_reconciliation/static/src/js/dashboard.js',
       ],
     },
     'external_dependencies': {
