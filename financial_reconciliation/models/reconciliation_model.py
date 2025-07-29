@@ -137,8 +137,7 @@ class FinancialReconciliation(models.Model):
             image_binary = base64.b64decode(image_data)
             if image_binary.startswith(b'%PDF'):
                 images = convert_from_bytes(image_binary)
-                text = "".join([pytesseract.image_to_string(img, lang='spa') for img in images])
-                return text
+                return "".join([pytesseract.image_to_string(img, lang='spa') for img in images])
             else:
                 img = Image.open(BytesIO(image_binary))
                 return pytesseract.image_to_string(img, lang='spa')
@@ -148,30 +147,18 @@ class FinancialReconciliation(models.Model):
 
     def _parse_date(self, date_str):
         """Intenta convertir una cadena de texto a un objeto de fecha de Odoo."""
-        if not date_str:
-            return None
-        
-        month_map = {
-            'enero': '01', 'ene': '01', 'febrero': '02', 'feb': '02', 'marzo': '03', 'mar': '03',
-            'abril': '04', 'abr': '04', 'mayo': '05', 'may': '05', 'junio': '06', 'jun': '06',
-            'julio': '07', 'jul': '07', 'agosto': '08', 'ago': '08', 'septiembre': '09', 'sep': '09',
-            'octubre': '10', 'oct': '10', 'noviembre': '11', 'nov': '11', 'diciembre': '12', 'dic': '12'
-        }
+        if not date_str: return None
+        month_map = {'enero': '01', 'ene': '01', 'febrero': '02', 'feb': '02', 'marzo': '03', 'mar': '03', 'abril': '04', 'abr': '04', 'mayo': '05', 'may': '05', 'junio': '06', 'jun': '06', 'julio': '07', 'jul': '07', 'agosto': '08', 'ago': '08', 'septiembre': '09', 'sep': '09', 'octubre': '10', 'oct': '10', 'noviembre': '11', 'nov': '11', 'diciembre': '12', 'dic': '12'}
         date_str_lower = date_str.lower()
         for k, v in month_map.items():
             date_str_lower = date_str_lower.replace(k, v)
-
         match = re.search(r'(\d{1,2})[/\s.-]+(\d{1,2})[/\s.-]+(\d{4})', date_str_lower)
         if match:
             day, month, year = match.group(1), match.group(2), match.group(3)
-            try:
-                return fields.Date.to_string(datetime.strptime(f"{day}/{month}/{year}", '%d/%m/%Y').date())
+            try: return fields.Date.to_string(datetime.strptime(f"{day}/{month}/{year}", '%d/%m/%Y').date())
             except ValueError:
-                try:
-                    return fields.Date.to_string(datetime.strptime(f"{month}/{day}/{year}", '%m/%d/%Y').date())
-                except ValueError:
-                    pass
-        _logger.warning("No se pudo convertir la fecha: %s", date_str)
+                try: return fields.Date.to_string(datetime.strptime(f"{month}/{day}/{year}", '%m/%d/%Y').date())
+                except ValueError: pass
         return None
 
     def process_ocr(self):
@@ -186,73 +173,75 @@ class FinancialReconciliation(models.Model):
         vals = {}
         lines = [line.strip() for line in ocr_text_raw.split('\n') if line.strip()]
 
-        # --- INICIO: Lógica para formato posicional (eCollect) ---
+        # --- Lógica para formato posicional (eCollect) ---
         for i, line in enumerate(lines):
             line_lower = line.lower()
             if 'razón social' in line_lower and 'nit' in line_lower and 'usuario pagador' in line_lower:
                 if i + 1 < len(lines):
-                    values_line = lines[i+1]
-                    parts = re.split(r'\s{2,}|\|', values_line)
+                    parts = re.split(r'\s{2,}|\|', lines[i+1])
                     if len(parts) >= 3:
                         vals['identification'] = re.sub(r'[^\d]', '', parts[-1])
             
             if 'transacción ecollect' in line_lower and 'fecha y hora' in line_lower:
                 if i + 1 < len(lines):
-                    date_match = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', lines[i+1])
-                    if date_match:
-                        vals['date'] = self._parse_date(date_match.group(1))
-        # --- FIN: Lógica para formato posicional ---
+                    vals['date'] = self._parse_date(lines[i+1])
+                    match = re.search(r'(\d{9,})', lines[i+1])
+                    if match:
+                        vals['receipt_number'] = match.group(1)
 
         # --- Lógica general por palabras clave (para todos los formatos) ---
         keyword_map = {
-            'número de contrato': 'contract_number', 'titular nombre': 'holder_name',
-            'titular documento': 'identification', 'referencia': 'reference',
-            'valor pagado': 'amount', 'cuánto': 'amount', 'valor de la transferencia': 'amount',
-            'valor del pago': 'amount', 'total pagado': 'amount', 'total': 'amount',
+            'número de contrato': 'contract_number', 'titular nombre': 'holder_name', 'titular documento': 'identification',
+            'referencia': 'reference', 'no. autorización/cus': 'reference',
+            'valor pagado': 'amount', 'cuánto': 'amount', 'valor de la transferencia': 'amount', 'valor del pago': 'amount', 'total pagado': 'amount', 'total': 'amount',
             'fecha de solicitud': 'date', 'fecha y hora': 'date', 'fecha': 'date',
-            'comprobante no': 'receipt_number', 'número de factura': 'receipt_number',
-            'cus': 'receipt_number', 'no. transacción': 'receipt_number', 'no. autorización/cus': 'reference',
+            'comprobante no': 'receipt_number', 'número de factura': 'receipt_number', 'no. transacción': 'receipt_number',
+            'concepto': 'concept',
         }
 
         for line in lines:
             line_lower = line.lower()
             for key, field in keyword_map.items():
                 if key in line_lower:
-                    if field in vals: continue # No sobreescribir si ya encontramos un valor
+                    if field in vals and field != 'amount': continue
 
                     value = ""
                     if ':' in line:
                         value = line.split(':', 1)[1].strip()
-                    else:
-                        # Si no hay ':', quitar la palabra clave y tomar el resto
-                        value = re.sub(key, '', line, flags=re.IGNORECASE).strip()
-                        value = value.lstrip('=').strip() # Quitar '=' al inicio
-
+                    elif line_lower.startswith(key):
+                        value = re.sub(key, '', line, count=1, flags=re.IGNORECASE).strip().lstrip('=').strip()
+                    
                     if value:
                         if field == 'amount':
                             clean_val = re.sub(r'[^\d,]', '', value).replace(',', '.')
                             if '.' in clean_val:
-                                val_parts = clean_val.split('.')
-                                clean_val = "".join(val_parts[:-1]) + "." + val_parts[-1]
-                            try: vals[field] = float(clean_val)
-                            except ValueError: pass
-                        elif field == 'identification':
-                            vals[field] = re.sub(r'[^\d]', '', value)
-                        elif field == 'date':
-                            vals[field] = self._parse_date(value)
-                        else:
-                            vals[field] = value
+                                parts = clean_val.split('.')
+                                clean_val = "".join(parts[:-1]) + "." + parts[-1]
+                            try:
+                                # Prioritize 'total' or 'total pagado' for accuracy
+                                if 'total' in key and float(clean_val) > 0:
+                                    vals[field] = float(clean_val)
+                                elif 'total' not in key and not vals.get(field):
+                                    vals[field] = float(clean_val)
+                            except (ValueError, TypeError): pass
+                        elif field == 'identification': vals[field] = re.sub(r'[^\d]', '', value)
+                        elif field == 'date': vals[field] = self._parse_date(value)
+                        else: vals[field] = value
                     break
 
+        # --- Barrido final para datos críticos si aún faltan ---
+        if not vals.get('date'):
+            match = re.search(r'(\d{1,2}[/\s]\d{1,2}[/\s]\d{4})', ocr_text_raw)
+            if match: vals['date'] = self._parse_date(match.group(1))
+
+        _logger.info("Valores de OCR extraídos para %s: %s", self.name, vals)
         if vals:
             self.write(vals)
             
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
+            'type': 'ir.actions.client', 'tag': 'display_notification',
             'params': {
-                'title': _("OCR Procesado"),
-                'message': _("Campos autocompletados. Por favor, verifique los datos."),
+                'title': _("OCR Procesado"), 'message': _("Campos autocompletados. Por favor, verifique los datos."),
                 'type': 'success', 'sticky': True,
             }
         }
